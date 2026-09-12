@@ -1,0 +1,57 @@
+name: Build Patched SideStore IPA
+
+on:
+  push:
+    paths-ignore:
+      - '**.md'
+      - 'LICENSE'
+      - '.editorconfig'
+      - '.gitignore'
+      - '.gitmodules'
+  workflow_dispatch:
+
+concurrency:
+  group: build-ipa-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build Patched IPA
+    runs-on: macos-26
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Install dependencies
+        run: brew install ldid xcbeautify
+
+      - name: Setup Environment
+        run: |
+          MARKETING_VERSION=$(python3 scripts/ci/workflow.py get-marketing-version)
+          SHORT_COMMIT=$(git rev-parse --short HEAD)
+          echo "SHORT_COMMIT=$SHORT_COMMIT" >> $GITHUB_ENV
+          echo "MARKETING_VERSION=$MARKETING_VERSION" >> $GITHUB_ENV
+
+      - name: Build SideStore
+        run: |
+          python3 scripts/ci/workflow.py build
+          cp SideStore.ipa SideStore-Patched.ipa
+
+      - name: Upload Patched IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: SideStore-Patched
+          path: SideStore-Patched.ipa
+          if-no-files-found: error
+
+      - name: Upload Build Logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-logs
+          path: build/logs/
+          if-no-files-found: warn

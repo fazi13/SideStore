@@ -20,6 +20,7 @@ class SideSignConfigurationViewModel: ObservableObject {
     @Published var grandSlamService: String = ""
     @Published var grandSlamHeaderVersion: String = ""
     @Published var grandSlamAuthApp: String = ""
+    @Published var grandSlamClientInfo: String = ""
     @Published var grandSlamUserAgent: String = ""
 
     @Published var appleAuthAppIDKey: String = ""
@@ -50,6 +51,7 @@ class SideSignConfigurationViewModel: ObservableObject {
         grandSlamService = headers.grandSlam.service
         grandSlamHeaderVersion = headers.grandSlam.headerVersion
         grandSlamAuthApp = headers.grandSlam.authApp
+        grandSlamClientInfo = headers.grandSlam.clientInfo
         grandSlamUserAgent = headers.grandSlam.userAgent
 
         appleAuthAppIDKey = headers.appleAuth.appIDKey
@@ -67,7 +69,8 @@ class SideSignConfigurationViewModel: ObservableObject {
                 service: grandSlamService.isEmpty ? Constants.GrandSlam.service : grandSlamService,
                 headerVersion: grandSlamHeaderVersion.isEmpty ? Constants.GrandSlam.headerVersion : grandSlamHeaderVersion,
                 authApp: grandSlamAuthApp.isEmpty ? Constants.GrandSlam.authApp : grandSlamAuthApp,
-                userAgent: grandSlamUserAgent.isEmpty ? Constants.GrandSlam.userAgent : grandSlamUserAgent
+                userAgent: grandSlamUserAgent.isEmpty ? Constants.GrandSlam.userAgent : grandSlamUserAgent,
+                clientInfo: grandSlamClientInfo.isEmpty ? Constants.GrandSlam.clientInfo : grandSlamClientInfo
             ),
             appleAuth: SideSignHeaders.AppleAuth(
                 appIDKey: appleAuthAppIDKey.isEmpty ? Constants.AppleAuth.appIDKey : appleAuthAppIDKey,
@@ -216,6 +219,16 @@ struct SideSignConfigurationView: View {
                                 headerKey: "X-Apple-App-Info",
                                 text: $viewModel.grandSlamAuthApp,
                                 placeholder: Constants.GrandSlam.authApp
+                            )
+
+                            divider
+
+                            headerFieldRow(
+                                title: "Client Info",
+                                headerKey: "X-Mme-Client-Info",
+                                text: $viewModel.grandSlamClientInfo,
+                                placeholder: Constants.GrandSlam.clientInfo,
+                                isMultiline: true
                             )
 
                             divider

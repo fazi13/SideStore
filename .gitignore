@@ -76,6 +76,9 @@ release-notes.md
 *.pdf
 *.txt
 
+.sdd/
+implementation-plans/
+
 Dependencies/minimuxer-*/
 .test/
 

@@ -112,13 +112,18 @@ class SignInFlowHandler: AnyObject, SignInHandler, AnisetteServerHandler {
         }
 
         let errorMessage: String? = request.error
+        let isThrottlingWarning: Bool = {
+            guard let err = errorMessage?.lowercased() else { return false }
+            return err.contains("last code") || err.contains("enter the last")
+        }()
 
-        if let errorMessage, !errorMessage.isEmpty {
+        if let errorMessage, !errorMessage.isEmpty && !isThrottlingWarning {
             let shouldRetry = try await showErrorRetryAlert(message: errorMessage)
             guard shouldRetry else {
                 return .cancel
             }
         }
+        let guidanceMessage = isThrottlingWarning ? errorMessage : nil
 
         switch request {
         case .selectDeliveryMethod(let preferredMode, let phoneNumbers):
@@ -134,6 +139,7 @@ class SignInFlowHandler: AnyObject, SignInHandler, AnisetteServerHandler {
         case .trustedDevice:
             return try await promptCodeEntry(
                 title: NSLocalizedString("Please enter the 6-digit verification code that was sent to your Apple devices.", comment: ""),
+                message: guidanceMessage,
                 phoneNumbers: [],
                 activePhoneID: "",
                 currentDeliveryMode: nil,
@@ -150,6 +156,7 @@ class SignInFlowHandler: AnyObject, SignInHandler, AnisetteServerHandler {
             }
             return try await promptCodeEntry(
                 title: title,
+                message: guidanceMessage,
                 phoneNumbers: phoneNumbers,
                 activePhoneID: activeID,
                 currentDeliveryMode: .sms,
@@ -166,6 +173,7 @@ class SignInFlowHandler: AnyObject, SignInHandler, AnisetteServerHandler {
             }
             return try await promptCodeEntry(
                 title: title,
+                message: guidanceMessage,
                 phoneNumbers: phoneNumbers,
                 activePhoneID: activeID,
                 currentDeliveryMode: .voice,
@@ -240,13 +248,14 @@ class SignInFlowHandler: AnyObject, SignInHandler, AnisetteServerHandler {
 
     @MainActor
     private func promptCodeEntry(title: String,
+                                 message: String? = nil,
                                  phoneNumbers: [TrustedPhoneNumber],
                                  activePhoneID: String,
                                  currentDeliveryMode: TwoFactorDeliveryMode?,
                                  isTrustedDevice: Bool) async throws -> TwoFactorResponse
     {
         return try await withCheckedThrowingContinuation { continuation in
-            let alertController = UIAlertController(title: title, message: nil, preferredStyle: .alert)
+            let alertController = UIAlertController(title: title, message: message, preferredStyle: .alert)
             var observer: NSObjectProtocol?
             alertController.addTextField { (textField) in
                 textField.autocorrectionType = .no

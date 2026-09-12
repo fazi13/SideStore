@@ -102,6 +102,7 @@ public enum AppConstants {
         public static let service        = Constants.GrandSlam.service
         public static let headerVersion  = Constants.GrandSlam.headerVersion
         public static let authApp        = Constants.GrandSlam.authApp
+        public static let clientInfo     = Constants.GrandSlam.clientInfo
         public static let userAgent      = Constants.GrandSlam.userAgent
     }
 
