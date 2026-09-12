@@ -95,7 +95,7 @@ final class ResignAppOperation: BasePipelineOperation<InstallAppOperationContext
             let udid: String
             do {
                 await CellularRefreshManager.shared.turnOffDataIfNeeded()
-                guard let fetchedUdid = try await fetchUDID() else { throw OperationError.unknownUDID }
+                guard let fetchedUdid = (try? await fetchUDID()) ?? (try? await fetchUDID(useStatic: true)) else { throw OperationError.unknownUDID }
                 udid = fetchedUdid
             } catch {
                 await CellularRefreshManager.shared.turnOnDataIfNeeded()
@@ -112,7 +112,7 @@ final class ResignAppOperation: BasePipelineOperation<InstallAppOperationContext
             } else {
                 self.verboseLog("[ResignAppOperation] No activeCertificate found in CertificateManager. Embedded certificate + certificate identifier in app bundle will not be updated.")
             }
-        } else if infoDictionary.keys.contains(Bundle.Info.deviceID), let udid = try await fetchUDID() {
+        } else if infoDictionary.keys.contains(Bundle.Info.deviceID), let udid = (try? await fetchUDID()) ?? (try? await fetchUDID(useStatic: true)) {
             // There is an ALTDeviceID entry, so assume the app is using AltKit and replace it with the device's UDID.
             additionalValues[Bundle.Info.deviceID] = udid
             additionalValues[Bundle.Info.serverID] = UserDefaults.standard.preferredServerID

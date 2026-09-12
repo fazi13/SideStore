@@ -9,6 +9,7 @@
 @preconcurrency import UIKit
 import UniformTypeIdentifiers
 import MinimuxerCommon
+import SideSign
 
 final class PairingFileManager: NSObject {
     static let shared = PairingFileManager()
@@ -17,6 +18,43 @@ final class PairingFileManager: NSObject {
     private var completion: ((URL?) -> Void)?
 
     nonisolated var pairingUDID: String? {
+        // 1. Check UserDefaults if previously discovered or saved
+        if let stored = UserDefaults.standard.string(forKey: Bundle.Info.deviceID),
+           !stored.isEmpty,
+           stored != "XXXXXXXX-XXXXXXXXXXXXXXXX",
+           stored != "XXXXX-XXXX-XXXXX-XXXX",
+           !stored.contains("X")
+        {
+            debugLog("[PairingFile] pairingUDID: found stored device ID in UserDefaults: \(stored)")
+            return stored
+        }
+
+        // 2. Check embedded.mobileprovision from app bundle
+        if let profile = try? ProvisioningProfile(url: Bundle.main.provisioningProfileURL),
+           let firstID = profile.deviceIDs.first,
+           !firstID.isEmpty,
+           firstID != "XXXXXXXX-XXXXXXXXXXXXXXXX",
+           firstID != "XXXXX-XXXX-XXXXX-XXXX",
+           !firstID.contains("X")
+        {
+            debugLog("[PairingFile] pairingUDID: found device UDID in embedded provisioning profile: \(firstID)")
+            UserDefaults.standard.set(firstID, forKey: Bundle.Info.deviceID)
+            return firstID
+        }
+
+        // 3. Check Bundle Info.plist for ALTDeviceID if non-placeholder
+        if let plistUDID = Bundle.main.object(forInfoDictionaryKey: Bundle.Info.deviceID) as? String,
+           !plistUDID.isEmpty,
+           plistUDID != "XXXXXXXX-XXXXXXXXXXXXXXXX",
+           plistUDID != "XXXXX-XXXX-XXXXX-XXXX",
+           !plistUDID.contains("X")
+        {
+            debugLog("[PairingFile] pairingUDID: found device UDID in Info.plist: \(plistUDID)")
+            UserDefaults.standard.set(plistUDID, forKey: Bundle.Info.deviceID)
+            return plistUDID
+        }
+
+        // 4. Check lockdown pairing file
         guard let contents = fetchPairingFile() else {
             debugLog("[PairingFile] pairingUDID: fetchPairingFile() returned nil")
             return nil
@@ -26,6 +64,9 @@ final class PairingFileManager: NSObject {
             guard let lockdown = pairing as? LockdownPairingFile else {
                 debugLog("[PairingFile] pairingUDID: Remote Pairing files do not contain a hardware UDID")
                 return nil
+            }
+            if !lockdown.udid.isEmpty {
+                UserDefaults.standard.set(lockdown.udid, forKey: Bundle.Info.deviceID)
             }
             return lockdown.udid
         } catch {

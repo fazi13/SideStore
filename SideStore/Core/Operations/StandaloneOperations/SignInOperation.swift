@@ -601,22 +601,70 @@ private extension SignInOperation {
             deviceUDID = try? await fetchUDID(useStatic: true)
         }
         
-        guard let udid = deviceUDID, !udid.isEmpty, udid != "XXXXX-XXXX-XXXXX-XXXX" else {
-            self.debugLog("[SignInOperation] Failed to fetch device UDID.")
-            throw OperationError.unknownUDID
+        self.debugLog("[SignInOperation] Fetching team devices from developer portal...")
+        let teamDevices = try await DeveloperPortalProxy.shared.fetchDevices(for: team, types: .all)
+        self.debugLog("[SignInOperation] Fetched \(teamDevices.count) device(s) on team '\(team.name)'")
+
+        // 1. If UDID is already known, verify if registered or register it
+        if let udid = deviceUDID, !udid.isEmpty, udid != "XXXXX-XXXX-XXXXX-XXXX" {
+            if let device = teamDevices.first(where: { $0.identifier == udid }) {
+                self.debugLog("[SignInOperation] Device '\(device.name)' (UDID: \(udid)) is registered on team.")
+                UserDefaults.standard.set(udid, forKey: Bundle.Info.deviceID)
+                return device
+            } else {
+                let deviceName = await MainActor.run { UIDevice.current.name }
+                self.debugLog("[SignInOperation] Registering new device '\(deviceName)' (UDID: \(udid))...")
+                let device = try await DeveloperPortalProxy.shared.registerDevice(name: deviceName, identifier: udid, type: DeveloperPortalProxy.currentDeviceType, team: team)
+                self.debugLog("[SignInOperation] Device '\(device.name)' (UDID: \(udid)) successfully registered.")
+                UserDefaults.standard.set(udid, forKey: Bundle.Info.deviceID)
+                return device
+            }
         }
-        self.debugLog("[SignInOperation] Fetched device UDID: \(udid). Fetching team devices...")
-        
-        let devices = try await DeveloperPortalProxy.shared.fetchDevices(for: team, types: .all)
-        if let device = devices.first(where: { $0.identifier == udid }) {
-            self.debugLog("[SignInOperation] Device '\(device.name)' (UDID: \(udid)) is registered on team.")
-            return device
-        } else {
-            let deviceName = await MainActor.run { UIDevice.current.name }
-            self.debugLog("[SignInOperation] Registering new device '\(deviceName)' (UDID: \(udid))...")
-            let device = try await DeveloperPortalProxy.shared.registerDevice(name: deviceName, identifier: udid, type: DeveloperPortalProxy.currentDeviceType, team: team)
-            self.debugLog("[SignInOperation] Device '\(device.name)' (UDID: \(udid)) successfully registered.")
-            return device
+
+        // 2. deviceUDID is nil. Match against embedded.mobileprovision ProvisionedDevices
+        if let profile = try? ProvisioningProfile(url: Bundle.main.provisioningProfileURL) {
+            let profileDeviceIDs = Set(profile.deviceIDs)
+            if let matchingDevice = teamDevices.first(where: { profileDeviceIDs.contains($0.identifier) }) {
+                self.debugLog("[SignInOperation] Discovered device '\(matchingDevice.name)' (UDID: \(matchingDevice.identifier)) matching embedded provisioning profile.")
+                UserDefaults.standard.set(matchingDevice.identifier, forKey: Bundle.Info.deviceID)
+                return matchingDevice
+            } else if let firstID = profile.deviceIDs.first, !firstID.isEmpty {
+                let deviceName = await MainActor.run { UIDevice.current.name }
+                self.debugLog("[SignInOperation] Registering device '\(deviceName)' (UDID: \(firstID)) from embedded profile...")
+                let device = try await DeveloperPortalProxy.shared.registerDevice(name: deviceName, identifier: firstID, type: DeveloperPortalProxy.currentDeviceType, team: team)
+                UserDefaults.standard.set(firstID, forKey: Bundle.Info.deviceID)
+                return device
+            }
         }
+
+        // 3. Match against UIDevice.current.name and currentDeviceType among teamDevices
+        let currentDeviceName = await MainActor.run { UIDevice.current.name }
+        let currentType = DeveloperPortalProxy.currentDeviceType
+        let matchingNameDevices = teamDevices.filter {
+            $0.name.caseInsensitiveCompare(currentDeviceName) == .orderedSame && $0.type.contains(currentType)
+        }
+        if let matched = matchingNameDevices.first {
+            self.debugLog("[SignInOperation] Discovered device '\(matched.name)' (UDID: \(matched.identifier)) by device name and type match.")
+            UserDefaults.standard.set(matched.identifier, forKey: Bundle.Info.deviceID)
+            return matched
+        }
+
+        // 4. Sole device of matching type on team
+        let matchingTypeDevices = teamDevices.filter { $0.type.contains(currentType) }
+        if matchingTypeDevices.count == 1, let singleDevice = matchingTypeDevices.first {
+            self.debugLog("[SignInOperation] Discovered device '\(singleDevice.name)' (UDID: \(singleDevice.identifier)) as sole \(currentType.displayName) on team.")
+            UserDefaults.standard.set(singleDevice.identifier, forKey: Bundle.Info.deviceID)
+            return singleDevice
+        }
+
+        // 5. Sole device total on team
+        if teamDevices.count == 1, let soleDevice = teamDevices.first {
+            self.debugLog("[SignInOperation] Discovered device '\(soleDevice.name)' (UDID: \(soleDevice.identifier)) as sole device on team.")
+            UserDefaults.standard.set(soleDevice.identifier, forKey: Bundle.Info.deviceID)
+            return soleDevice
+        }
+
+        self.debugLog("[SignInOperation] Failed to fetch or discover device UDID.")
+        throw OperationError.unknownUDID
     }
 }
