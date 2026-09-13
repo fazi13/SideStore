@@ -29,6 +29,9 @@ jobs:
       - name: Install dependencies
         run: brew install ldid xcbeautify
 
+      - name: Patch minimuxer for iOS 17 Lockdown child services
+        run: python3 scripts/ci/patch_minimuxer.py
+
       - name: Setup Environment
         run: |
           MARKETING_VERSION=$(python3 scripts/ci/workflow.py get-marketing-version)
