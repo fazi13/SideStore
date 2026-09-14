@@ -21,6 +21,8 @@ concurrency:
 jobs:
   build:
     runs-on: macos-26
+    permissions:
+      contents: write
     env:
       DEPLOY_KEY: ${{ secrets.CROSS_REPO_PUSH_KEY }}
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -61,6 +63,10 @@ jobs:
 
       - run: brew install ldid xcbeautify
         if: steps.build_gate.outputs.should_skip != 'true'
+
+      - name: Patch minimuxer for iOS 17 Lockdown child services
+        if: steps.build_gate.outputs.should_skip != 'true'
+        run: python3 scripts/ci/patch_minimuxer.py
 
       # --------------------------------------------------
       # runtime env setup
@@ -264,4 +270,4 @@ jobs:
             "$CHANNEL" \
             "$GITHUB_SHA" \
             "$GITHUB_REPOSITORY" \
-            "$UPSTREAM_CHANNEL"
+            "$UPSTREAM_CHANNEL" || echo "Release upload skipped or failed in fork"
